@@ -71,6 +71,7 @@ type Service interface {
 	GetLast(ctx context.Context) (Session, error)
 	List(ctx context.Context) ([]Session, error)
 	Save(ctx context.Context, session Session) (Session, error)
+	GetOrCreateSystemPrompt(ctx context.Context, sessionID, systemPrompt string) (string, error)
 	UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error
 	Rename(ctx context.Context, id string, title string) error
 	Delete(ctx context.Context, id string) error
@@ -218,6 +219,28 @@ func (s *service) Save(ctx context.Context, session Session) (Session, error) {
 	session.EstimatedUsage = estimatedUsage
 	s.Publish(pubsub.UpdatedEvent, session)
 	return session, nil
+}
+
+// GetOrCreateSystemPrompt stores the first system prompt used for a session
+// and returns that same prompt for every subsequent run. This keeps resumed
+// conversations stable when repository state or other local context changes.
+func (s *service) GetOrCreateSystemPrompt(ctx context.Context, sessionID, systemPrompt string) (string, error) {
+	_, err := s.q.SetSessionPrompt(ctx, db.SetSessionPromptParams{
+		SystemPrompt: sql.NullString{String: systemPrompt, Valid: true},
+		ID:           sessionID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("storing session system prompt: %w", err)
+	}
+
+	stored, err := s.q.GetSessionPrompt(ctx, sessionID)
+	if err != nil {
+		return "", fmt.Errorf("loading session system prompt: %w", err)
+	}
+	if !stored.Valid {
+		return "", fmt.Errorf("session system prompt was not stored")
+	}
+	return stored.String, nil
 }
 
 // UpdateTitleAndUsage updates only the title and usage fields atomically.

@@ -707,6 +707,15 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 		systemPrompt += "\n\n<mcp-instructions>\n" + s + "\n</mcp-instructions>"
 	}
 
+	currentSession, err := a.sessions.Get(ctx, call.SessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session: %w", err)
+	}
+	systemPrompt, err = a.sessions.GetOrCreateSystemPrompt(ctx, call.SessionID, systemPrompt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session system prompt: %w", err)
+	}
+
 	if len(agentTools) > 0 {
 		// Add Anthropic caching to the last tool.
 		agentTools[len(agentTools)-1].SetProviderOptions(a.getCacheControlOptions())
@@ -720,11 +729,6 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 	)
 
 	sessionLock := sync.Mutex{}
-	currentSession, err := a.sessions.Get(ctx, call.SessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get session: %w", err)
-	}
-
 	msgs, err := a.getSessionMessages(ctx, currentSession)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session messages: %w", err)

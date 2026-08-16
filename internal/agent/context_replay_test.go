@@ -299,6 +299,68 @@ func TestRun_ReplaysPersistedHistoryWithoutChangingPromptPrefix(t *testing.T) {
 	require.True(t, foundFinalAnswer)
 }
 
+func TestRun_ReusesPersistedSystemPromptAfterAgentRestart(t *testing.T) {
+	t.Parallel()
+
+	env := testEnv(t)
+	model := &replayProbeModel{}
+	small := &finishStreamModel{text: "title"}
+	echo := fantasy.NewAgentTool(
+		"echo",
+		"Echo the input.",
+		func(_ context.Context, input struct {
+			Message string `json:"message"`
+		}, _ fantasy.ToolCall,
+		) (fantasy.ToolResponse, error) {
+			return fantasy.NewTextResponse("Echo: " + input.Message), nil
+		},
+	)
+
+	sess, err := env.sessions.Create(t.Context(), "session")
+	require.NoError(t, err)
+
+	firstAgent := testSessionAgent(env, model, small, "system prompt before repository changes", echo)
+	_, err = firstAgent.Run(t.Context(), SessionAgentCall{
+		SessionID: sess.ID,
+		Prompt:    "first turn",
+	})
+	require.NoError(t, err)
+
+	resumedAgent := testSessionAgent(env, model, small, "system prompt after repository changes", echo)
+	_, err = resumedAgent.Run(t.Context(), SessionAgentCall{
+		SessionID: sess.ID,
+		Prompt:    "resumed turn",
+	})
+	require.NoError(t, err)
+
+	calls := model.recordedCalls()
+	require.Len(t, calls, 3)
+	for _, call := range calls {
+		require.Equal(t, "system prompt before repository changes", systemPromptText(t, call.Prompt))
+	}
+
+	stored, err := env.sessions.GetOrCreateSystemPrompt(t.Context(), sess.ID, "another prompt")
+	require.NoError(t, err)
+	require.Equal(t, "system prompt before repository changes", stored)
+}
+
+func systemPromptText(t *testing.T, prompt fantasy.Prompt) string {
+	t.Helper()
+
+	for _, msg := range prompt {
+		if msg.Role != fantasy.MessageRoleSystem {
+			continue
+		}
+		for _, part := range msg.Content {
+			if text, ok := part.(fantasy.TextPart); ok {
+				return text.Text
+			}
+		}
+	}
+	t.Fatal("prompt did not contain a system message")
+	return ""
+}
+
 func TestRun_ReplaysLongOpenAIHistoryWithoutChangingWirePrefix(t *testing.T) {
 	t.Parallel()
 

@@ -28,6 +28,16 @@ SELECT *
 FROM sessions
 WHERE id = ? LIMIT 1;
 
+-- name: SetSessionPrompt :execrows
+UPDATE sessions
+SET system_prompt = ?
+WHERE id = ? AND system_prompt IS NULL;
+
+-- name: GetSessionPrompt :one
+SELECT system_prompt
+FROM sessions
+WHERE id = ? LIMIT 1;
+
 -- name: GetLastSession :one
 SELECT *
 FROM sessions

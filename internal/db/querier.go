@@ -6,6 +6,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
@@ -26,6 +27,7 @@ type Querier interface {
 	GetMessage(ctx context.Context, id string) (Message, error)
 	GetRecentActivity(ctx context.Context) ([]GetRecentActivityRow, error)
 	GetSessionByID(ctx context.Context, id string) (Session, error)
+	GetSessionPrompt(ctx context.Context, id string) (sql.NullString, error)
 	GetToolUsage(ctx context.Context) ([]GetToolUsageRow, error)
 	GetTotalStats(ctx context.Context) (GetTotalStatsRow, error)
 	GetUsageByDay(ctx context.Context) ([]GetUsageByDayRow, error)
@@ -43,6 +45,7 @@ type Querier interface {
 	ListUserMessagesBySession(ctx context.Context, sessionID string) ([]Message, error)
 	RecordFileRead(ctx context.Context, arg RecordFileReadParams) error
 	RenameSession(ctx context.Context, arg RenameSessionParams) error
+	SetSessionPrompt(ctx context.Context, arg SetSessionPromptParams) (int64, error)
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) error
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)
 	UpdateSessionTitleAndUsage(ctx context.Context, arg UpdateSessionTitleAndUsageParams) error

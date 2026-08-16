@@ -33,7 +33,7 @@ INSERT INTO sessions (
     null,
     strftime('%s', 'now'),
     strftime('%s', 'now')
-) RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos
+) RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, system_prompt
 `
 
 type CreateSessionParams struct {
@@ -69,6 +69,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.CreatedAt,
 		&i.SummaryMessageID,
 		&i.Todos,
+		&i.SystemPrompt,
 	)
 	return i, err
 }
@@ -84,7 +85,7 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 }
 
 const getLastSession = `-- name: GetLastSession :one
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, system_prompt
 FROM sessions
 ORDER BY updated_at DESC
 LIMIT 1
@@ -105,12 +106,13 @@ func (q *Queries) GetLastSession(ctx context.Context) (Session, error) {
 		&i.CreatedAt,
 		&i.SummaryMessageID,
 		&i.Todos,
+		&i.SystemPrompt,
 	)
 	return i, err
 }
 
 const getSessionByID = `-- name: GetSessionByID :one
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, system_prompt
 FROM sessions
 WHERE id = ? LIMIT 1
 `
@@ -130,12 +132,26 @@ func (q *Queries) GetSessionByID(ctx context.Context, id string) (Session, error
 		&i.CreatedAt,
 		&i.SummaryMessageID,
 		&i.Todos,
+		&i.SystemPrompt,
 	)
 	return i, err
 }
 
+const getSessionPrompt = `-- name: GetSessionPrompt :one
+SELECT system_prompt
+FROM sessions
+WHERE id = ? LIMIT 1
+`
+
+func (q *Queries) GetSessionPrompt(ctx context.Context, id string) (sql.NullString, error) {
+	row := q.queryRow(ctx, q.getSessionPromptStmt, getSessionPrompt, id)
+	var system_prompt sql.NullString
+	err := row.Scan(&system_prompt)
+	return system_prompt, err
+}
+
 const listSessions = `-- name: ListSessions :many
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, system_prompt
 FROM sessions
 WHERE parent_session_id is NULL
 ORDER BY updated_at DESC
@@ -162,6 +178,7 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 			&i.CreatedAt,
 			&i.SummaryMessageID,
 			&i.Todos,
+			&i.SystemPrompt,
 		); err != nil {
 			return nil, err
 		}
@@ -193,6 +210,25 @@ func (q *Queries) RenameSession(ctx context.Context, arg RenameSessionParams) er
 	return err
 }
 
+const setSessionPrompt = `-- name: SetSessionPrompt :execrows
+UPDATE sessions
+SET system_prompt = ?
+WHERE id = ? AND system_prompt IS NULL
+`
+
+type SetSessionPromptParams struct {
+	SystemPrompt sql.NullString `json:"system_prompt"`
+	ID           string         `json:"id"`
+}
+
+func (q *Queries) SetSessionPrompt(ctx context.Context, arg SetSessionPromptParams) (int64, error) {
+	result, err := q.exec(ctx, q.setSessionPromptStmt, setSessionPrompt, arg.SystemPrompt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateSession = `-- name: UpdateSession :one
 UPDATE sessions
 SET
@@ -203,7 +239,7 @@ SET
     cost = ?,
     todos = ?
 WHERE id = ?
-RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos
+RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, system_prompt
 `
 
 type UpdateSessionParams struct {
@@ -239,6 +275,7 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) (S
 		&i.CreatedAt,
 		&i.SummaryMessageID,
 		&i.Todos,
+		&i.SystemPrompt,
 	)
 	return i, err
 }

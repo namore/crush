@@ -60,6 +60,10 @@ func (m *mockSessionService) Save(_ context.Context, s session.Session) (session
 	return s, nil
 }
 
+func (m *mockSessionService) GetOrCreateSystemPrompt(_ context.Context, _ string, systemPrompt string) (string, error) {
+	return systemPrompt, nil
+}
+
 func (m *mockSessionService) UpdateTitleAndUsage(context.Context, string, string, int64, int64, float64) error {
 	return nil
 }
